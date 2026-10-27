@@ -7,34 +7,26 @@
 
 
 
+  <context_data>
+    <context_set space="code">
+      <!-- ARP and DP unknown until MAR/indirect ",ARn" and LDP #k set them: unknown values are
+           resolved at run time in p-code -->
+      <set name="arp_k" val="0"/>
+      <set name="dp_k" val="0"/>
+      <!-- modes assumed at reset values (SXM=1, OVM=0, PM=0) until an instruction changes them;
+           set *_k to 0 over a range to make the p-code read the status bits instead -->
+      <set name="sxm_k" val="1"/>
+      <set name="sxm_v" val="1"/>
+      <set name="ovm_k" val="1"/>
+      <set name="ovm_v" val="0"/>
+      <set name="pm_k" val="1"/>
+      <set name="pm_v" val="0"/>
+    </context_set>
+  </context_data>
+
   <register_data>
-  
-      <!-- Accumulator & MAC path -->
-      <register name="ACC" group="General"/>    <!-- 32-bit accumulator -->
-      <register name="ACCL" group="General"/>    <!-- 16-bit accumulator low word-->
-      <register name="ACCH" group="General"/>    <!-- 16-bit accumulator high word-->
-
-      <register name="PREG" group="General"/>   <!-- 32-bit product reg -->
-      <register name="TREG" group="General"/>   <!-- multiplier temp (TREG) -->
-    
-      <!-- AR registers -->
-      <register name="AR0" group="General"/>
-      <register name="AR1" group="General"/>
-      <register name="AR2" group="General"/>
-      <register name="AR3" group="General"/>
-      <register name="AR4" group="General"/>
-      <register name="AR5" group="General"/>
-      <register name="AR6" group="General"/>
-      <register name="AR7" group="General"/>
-    
-      <!-- Status/control -->
-      <register name="ST0" group="Status"/>
-      <register name="ST1" group="Status"/>
-
-      <!-- Program counter and stack pointer -->
-      <register name="PC" group="Control"/> 
-      <register name="SP" group="Control"/>
-
+    <register name="contextreg" hidden="true"/>
+    <register name="RPTI" hidden="true"/>
   </register_data>
 
   <default_memory_blocks>
