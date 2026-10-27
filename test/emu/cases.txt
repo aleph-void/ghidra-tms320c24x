@@ -1,0 +1,829 @@
+# Hand-computed expectations for the TMS320C24x p-code, worked out from the instruction descriptions
+# in SPRU160C (TMS320F/C24x DSP Controllers CPU and Instruction Set Reference Guide), independent of
+# the SLEIGH. Encodings are taken from the opcode column of the manual's instruction tables.
+# Format: see C24xEmuTest.java. Code starts at code:0100 (word addresses); the pspec context defaults
+# are SXM=1, OVM=0, PM=0 known; ARP and DP are read from the registers at run time.
+
+# ---- ALU: shifts, carry, overflow, saturation
+case add_shift                      # LDP #0; LACC 60h,4; ADD 61h,8  (SXM=1: 8001h sign-extends)
+code BC00 1460 2861
+set ram:0060 0x8001
+set ram:0061 0x0123
+expect ACC 0xfff92310
+expect C 0
+expect OV 0
+end
+case sxm_off_lacc                   # CLRC SXM; LDP #0; LACC 60h,4: no sign extension
+code BE46 BC00 1460
+set ram:0060 0x8001
+expect ACC 0x00080010
+end
+case sxm_unknown_runtime0           # SXM not tracked (context): the status bit is read at run time
+context sxm_k 0
+code BC00 1460
+set SXM 0
+set ram:0060 0x8001
+expect ACC 0x00080010
+end
+case sxm_unknown_runtime1
+context sxm_k 0
+code BC00 1460
+set SXM 1
+set ram:0060 0x8001
+expect ACC 0xfff80010
+end
+case add16_keeps_c                  # ADD 60h,16 without carry leaves C set
+code BC00 BE4F B900 6160
+set ram:0060 1
+expect ACC 0x10000
+expect C 1
+end
+case add16_carry                    # ADD 60h,16 with carry sets C
+code BC00 6160
+set ACC 0xffff0000
+set C 0
+set ram:0060 1
+expect ACC 0
+expect C 1
+expect OV 0
+end
+case sub16_borrow                   # SUB 60h,16 from 0 borrows: C cleared
+code BC00 BE4F B900 6560
+set ram:0060 1
+expect ACC 0xffff0000
+expect C 0
+end
+case sub_noborrow                   # LACL #5; SUB #3: no borrow sets C
+code BE4E B905 BA03
+expect ACC 2
+expect C 1
+end
+case sub_borrow                     # LACL #3; SUB #5 borrows: C=0
+code BE4F B903 BA05
+expect ACC 0xfffffffe
+expect C 0
+expect OV 0
+end
+case add_overflow                   # 7FFFFFFFh + 1 wraps, OV latched, no carry
+code B801
+set ACC 0x7fffffff
+expect ACC 0x80000000
+expect OV 1
+expect C 0
+end
+case add_overflow_sat               # SETC OVM: saturates to 7FFFFFFFh
+code BE43 B801
+set ACC 0x7fffffff
+expect ACC 0x7fffffff
+expect OV 1
+expect OVM 1
+end
+case sub_underflow_sat              # SETC OVM; 80000000h - 1 saturates to 80000000h
+code BE43 BA01
+set ACC 0x80000000
+expect ACC 0x80000000
+expect OV 1
+end
+case addc                           # FFFFFFFEh + 1 + C(1) = 0, carry out
+code BC00 6060
+set ACC 0xfffffffe
+set C 1
+set ram:0060 1
+expect ACC 0
+expect C 1
+expect OV 0
+end
+case subb_borrow_in                 # 5 - 2 - not(C=0) = 2, no borrow out: C=1
+code BC00 6460
+set ACC 5
+set C 0
+set ram:0060 2
+expect ACC 2
+expect C 1
+end
+case subb_no_borrow_in
+code BC00 6460
+set ACC 5
+set C 1
+set ram:0060 2
+expect ACC 3
+expect C 1
+end
+case abs_neg                        # ABS clears C
+code BE00
+set ACC 0xfffffff6
+set C 1
+expect ACC 0xa
+expect C 0
+end
+case abs_min_nosat                  # 80000000h stays, OV set
+code BE00
+set ACC 0x80000000
+expect ACC 0x80000000
+expect OV 1
+end
+case abs_min_sat
+code BE43 BE00
+set ACC 0x80000000
+expect ACC 0x7fffffff
+expect OV 1
+end
+case neg_nonzero                    # NEG clears C for nonzero
+code BE02
+set ACC 5
+set C 1
+expect ACC 0xfffffffb
+expect C 0
+end
+case neg_zero                       # NEG sets C for zero
+code BE02
+set ACC 0
+set C 0
+expect ACC 0
+expect C 1
+end
+case cmpl
+code BE01
+set ACC 0x0f0f0f0f
+expect ACC 0xf0f0f0f0
+end
+case and_dma                        # AND dma: low word ANDed, high word zeroed
+code BC00 6E60
+set ACC 0x12345678
+set ram:0060 0x0ff0
+expect ACC 0x00000670
+end
+case or_dma                         # OR dma: high word unaffected
+code BC00 6D60
+set ACC 0x12345678
+set ram:0060 0x000f
+expect ACC 0x1234567f
+end
+case xor_dma
+code BC00 6C60
+set ACC 0x12345678
+set ram:0060 0xffff
+expect ACC 0x1234a987
+end
+case and_lk_shift                   # AND #00FFh,8
+code BFB8 00FF
+set ACC 0x12345678
+expect ACC 0x00005600
+end
+case and_lk_16                      # AND #FF00h,16
+code BE81 FF00
+set ACC 0x12345678
+expect ACC 0x12000000
+end
+case or_lk_16                       # OR #00F0h,16
+code BE82 00F0
+set ACC 0x12345678
+expect ACC 0x12f45678
+end
+case xor_lk_16                      # XOR #FFFFh,16
+code BE83 FFFF
+set ACC 0x12345678
+expect ACC 0xedcb5678
+end
+case rol
+code BE0C
+set ACC 0x80000001
+set C 0
+expect ACC 2
+expect C 1
+end
+case ror
+code BE0D
+set ACC 1
+set C 1
+expect ACC 0x80000000
+expect C 1
+end
+case sfl
+code BE09
+set ACC 0xc0000000
+expect ACC 0x80000000
+expect C 1
+end
+case sfr_sxm1                       # arithmetic shift right
+code BE0A
+set ACC 0x80000001
+expect ACC 0xc0000000
+expect C 1
+end
+case sfr_sxm0                       # CLRC SXM: logical shift right
+code BE46 BE0A
+set ACC 0x80000001
+expect ACC 0x40000000
+expect C 1
+end
+case lacl_k
+code B9FF
+set ACC 0xffffffff
+expect ACC 0xff
+end
+case lacl_dma_no_sign               # LACL never sign-extends
+code BC00 6960
+set ACC 0xffffffff
+set ram:0060 0x8001
+expect ACC 0x8001
+end
+case lact                           # LACT: shift by TREG(3:0)=4, SXM=1
+code BC00 6B60
+set TREG 0x14
+set ram:0060 0x8001
+expect ACC 0xfff80010
+end
+case addt
+code BC00 6360
+set ACC 0x10
+set TREG 0x13
+set ram:0060 2
+expect ACC 0x20
+end
+case subt
+code BC00 6760
+set ACC 0x100
+set TREG 2
+set ram:0060 3
+expect ACC 0xf4
+end
+case zalr                           # ZALR: rounds, 8000h in the low word
+code BC00 6860
+set ram:0060 0x1234
+expect ACC 0x12348000
+end
+case adds                           # ADDS: unsigned data
+code BC00 6260
+set ACC 1
+set ram:0060 0x8000
+expect ACC 0x8001
+end
+case subs
+code BC00 6660
+set ACC 0x10000
+set ram:0060 0xffff
+expect ACC 1
+end
+case lacc_16
+code BC00 6A60
+set ram:0060 0x1234
+expect ACC 0x12340000
+end
+case lacc_lk_shift                  # LACC #8000h,3 (SXM=1)
+code BF83 8000
+expect ACC 0xfffc0000
+end
+case subc_divide_step               # SUBC: ACC=100, divisor 7 -> 100-7*2^15<0 -> ACC=200
+code BC00 0A60
+set ACC 100
+set ram:0060 7
+expect ACC 200
+end
+case subc_subtract                  # ACC=0x70005, divisor 7: ALU = 0x70005-0x38000 = 0x38005 >= 0 -> *2+1
+code BC00 0A60
+set ACC 0x00070005
+set ram:0060 7
+expect ACC 0x0007000b
+end
+# ---- multiplier
+case mpy_signed
+code BC00 5460
+set TREG 0xfffe
+set ram:0060 3
+expect PREG 0xfffffffa
+end
+case mpyu
+code BC00 5560
+set TREG 0xfffe
+set ram:0060 3
+expect PREG 0x0002fffa
+end
+case mpy_k_negative                 # MPY #-2: 13-bit constant sign-extended
+code DFFE
+set TREG 3
+expect PREG 0xfffffffa
+end
+case mpy_k_positive
+code C005
+set TREG 0x1000
+expect PREG 0x5000
+end
+case lt_pac
+code BC00 7360 BE03
+set ram:0060 0x23
+expect TREG 0x23
+expect ACC 0
+end
+case spm1_apac                      # SPM 1; APAC: ACC += P << 1
+code BF01 BE04
+set PREG 0x10
+set ACC 0x100
+expect ACC 0x120
+expect PM 1
+end
+case spm2_pac                       # SPM 2: P << 4
+code BF02 BE03
+set PREG 1
+expect ACC 0x10
+end
+case spm3_pac                       # SPM 3: P >> 6 sign-extended
+code BF03 BE03
+set PREG 0xfffff000
+expect ACC 0xffffffc0
+end
+case spac
+code BE05
+set ACC 10
+set PREG 3
+expect ACC 7
+end
+case mpya                           # ACC += P; P = TREG * data
+code BC00 5060
+set ACC 0
+set PREG 5
+set TREG 2
+set ram:0060 3
+expect ACC 5
+expect PREG 6
+end
+case mpys
+code BC00 5160
+set ACC 10
+set PREG 5
+set TREG 2
+set ram:0060 3
+expect ACC 5
+expect PREG 6
+end
+case sqra                           # ACC += P; TREG = data; P = data^2
+code BC00 5260
+set ACC 1
+set PREG 4
+set ram:0060 5
+expect ACC 5
+expect TREG 5
+expect PREG 25
+end
+case sqrs
+code BC00 5360
+set ACC 10
+set PREG 4
+set ram:0060 3
+expect ACC 6
+expect TREG 3
+expect PREG 9
+end
+case lta
+code BC00 7060
+set ACC 1
+set PREG 4
+set ram:0060 9
+expect ACC 5
+expect TREG 9
+end
+case ltp
+code BC00 7160
+set ACC 1
+set PREG 4
+set ram:0060 9
+expect ACC 4
+expect TREG 9
+end
+case lts
+code BC00 7460
+set ACC 10
+set PREG 4
+set ram:0060 9
+expect ACC 6
+expect TREG 9
+end
+case ltd_moves_data                 # LTD: TREG=data, data+1=data, ACC += P
+code BC00 7260
+set ACC 1
+set PREG 4
+set ram:0060 9
+set ram:0061 0x77
+expect ACC 5
+expect TREG 9
+expect ram:0061 9
+end
+case lph_sph_spl
+code BC00 7560 8D61 8C62
+set PREG 0x0000abcd
+set ram:0060 0x1234
+expect PREG 0x1234abcd
+expect ram:0061 0x1234
+expect ram:0062 0xabcd
+end
+case sph_pm3                        # SPH/SPL go through the product shifter
+code BC00 8D60 8C61 BF03
+set PREG 0xfffff000
+expect PREG 0xfffff000
+end
+# ---- stores, status registers
+case sacl_sach_shift                # SACL 60h,1 / SACH 61h,4 of 12345678h
+code BC00 9160 9C61
+set ACC 0x12345678
+expect ram:0060 0xacf0
+expect ram:0061 0x2345
+end
+case sst0_sst1                      # SST #0,10h / SST #1,11h are page 0 whatever DP is
+code BD45 8E10 8F11
+set ARP 3
+set OV 1
+set OVM 0
+set INTM 1
+set ARB 2
+set SXM 1
+set CNF 1
+set TC 0
+set C 1
+set XF 1
+set PM 2
+expect ram:0010 0x7745
+expect ram:0011 0x57fe
+end
+case lst0                           # LST #0: ARP, OV, OVM, DP; INTM and ARB untouched
+code BC00 0E60
+set ram:0060 0xf8a3
+set INTM 1
+set ARB 2
+expect ARP 7
+expect OV 1
+expect OVM 1
+expect DP 0xa3
+expect INTM 1
+expect ARB 2
+end
+case lst1                           # LST #1: ARB (also loaded into ARP), CNF, TC, SXM, C, XF, PM
+code BC00 0F60
+set ram:0060 0xb5ff
+set TC 1
+set C 1
+set SXM 0
+expect ARB 5
+expect ARP 5
+expect CNF 1
+expect TC 0
+expect SXM 1
+expect C 0
+expect XF 1
+expect PM 3
+end
+case setc_clrc
+code BE4B BE4D BE45 BE41 BE4A BE44
+expect TC 0
+expect XF 1
+expect CNF 0
+expect INTM 1
+end
+case ldp_k
+code BD45
+expect DP 0x145
+end
+case ldp_dma
+code BC00 0D60
+set ram:0060 0xfe23
+expect DP 0x023
+end
+case ldp_direct_address             # LDP #2; LACL 5 reads data address 2*128+5
+code BC02 6905
+set ram:0105 0xbeef
+expect ACC 0xbeef
+end
+# ---- auxiliary registers, indirect addressing
+case lar_sar
+code BC00 0360 8361 BF0A 1234
+set ram:0060 0x4321
+expect AR3 0x4321
+expect ram:0061 0x4321
+expect AR2 0x1234
+end
+case lar_short
+code B5FF
+expect AR5 0xff
+end
+case indirect_postinc_ar1           # MAR *,AR1; LACL *+ twice
+code B160 8B89 69A0 69A0
+set ram:0060 0x11
+set ram:0061 0x22
+expect ACC 0x22
+expect AR1 0x62
+expect ARP 1
+end
+case indirect_postdec              # LACL *-
+code B160 8B89 6990
+set ram:0060 0x11
+expect ACC 0x11
+expect AR1 0x5f
+end
+case indirect_plus_ar0              # *0+ and *0-
+code B160 B004 8B89 69E0 69D0
+set ram:0064 0x44
+set ram:0060 0x11
+expect ACC 0x44
+expect AR1 0x60
+end
+case indirect_br0_plus              # *BR0+: reverse-carry add, AR1=8000h + AR0=8000h -> 4000h
+code 8B89 69F0
+set AR1 0x8000
+set AR0 0x8000
+expect AR1 0x4000
+end
+case indirect_br0_minus             # *BR0-: 4000h -brc 8000h -> 8000h
+code 8B89 69C0
+set AR1 0x4000
+set AR0 0x8000
+expect AR1 0x8000
+end
+case indirect_next_arp              # LACL *+,AR2: ARP=2 and ARB takes the old ARP (1)
+code B160 8B89 69AA
+set ram:0060 5
+expect ARP 2
+expect ARB 1
+expect AR1 0x61
+expect ACC 5
+end
+case adrk_sbrk
+code 8B89 7805 7C16
+set AR1 0x10
+expect AR1 0xffff
+end
+case adrk
+code 8B89 780F
+set AR1 0x10
+expect AR1 0x1f
+end
+case cmpr_lt                        # CMPR 1: AR1 < AR0
+code 8B89 BF45
+set AR1 3
+set AR0 5
+set TC 0
+expect TC 1
+end
+case cmpr_gt_false
+code 8B89 BF46
+set AR1 3
+set AR0 5
+set TC 1
+expect TC 0
+end
+case cmpr_ne
+code 8B89 BF47
+set AR1 3
+set AR0 5
+expect TC 1
+end
+case cmpr_eq_false
+code 8B89 BF44
+set AR1 3
+set AR0 5
+set TC 1
+expect TC 0
+end
+case bit_dma                        # BIT 60h,9 tests bit 15-9 = 6
+code BC00 4960
+set ram:0060 0x0040
+expect TC 1
+end
+case bit_clear
+code BC00 4960
+set ram:0060 0x0020
+set TC 1
+expect TC 0
+end
+case bitt
+code BC00 6F60
+set TREG 0x19
+set ram:0060 0x0040
+expect TC 1
+end
+case norm_shift                     # NORM *+: bits 31/30 equal -> shift, TC=0, AR1+1
+code 8B89 A0A0
+set ACC 0x00004000
+set AR1 0x40
+set TC 1
+expect ACC 0x00008000
+expect TC 0
+expect AR1 0x41
+end
+case norm_done                      # bits 31/30 differ: TC=1, no shift, AR unchanged
+code 8B89 A0A0
+set ACC 0x40000000
+set AR1 0x40
+set TC 0
+expect ACC 0x40000000
+expect TC 1
+expect AR1 0x40
+end
+case norm_zero
+code 8B89 A0A0
+set ACC 0
+set AR1 0x40
+set TC 0
+expect TC 1
+expect AR1 0x40
+end
+# ---- memory moves, repeat
+case splk_in_out                    # SPLK; OUT; IN
+code BC00 AE60 1234 0C60 0020 AF61 0010
+set io:0010 0x7777
+expect ram:0060 0x1234
+expect io:0020 0x1234
+expect ram:0061 0x7777
+end
+case rpt_add                        # RPT #2; ADD #1 runs three times
+code BB02 B801
+expect ACC 3
+expect RPTC 0
+end
+case rpt_dma                        # RPT 60h: counter from memory
+code BC00 0B60 B801
+set ram:0060 4
+expect ACC 5
+end
+case bldd_repeat                    # RPT #2; BLDD #200h,*+ copies 3 words
+code B160 8B89 BB02 A8A0 0200
+set ram:0200 0xa
+set ram:0201 0xb
+set ram:0202 0xc
+expect ram:0060 0xa
+expect ram:0061 0xb
+expect ram:0062 0xc
+expect AR1 0x63
+end
+case bldd_to_long                   # BLDD 60h,#210h
+code BC00 A960 0210
+set ram:0060 0x1357
+expect ram:0210 0x1357
+end
+case blpd                           # BLPD #300h,60h
+code BC00 A560 0300
+set code:0300 0xbeef
+expect ram:0060 0xbeef
+end
+case tblr_tblw                      # ACC low = program address; TBLR then TBLW
+code BC00 A660 A760
+set ACC 0x300
+set code:0300 0xcafe
+expect ram:0060 0xcafe
+expect code:0300 0xcafe
+end
+case tblw_writes_program
+code BC00 A761
+set ACC 0x0301
+set ram:0061 0xface
+expect code:0301 0xface
+end
+case mac_repeat                     # RPT #1; MAC 200h,*+; APAC
+code B160 8B89 BB01 A2A0 0200 BE04
+set ram:0060 3
+set ram:0061 5
+set code:0200 4
+set code:0201 6
+expect ACC 0x2a
+expect PREG 0x1e
+expect TREG 5
+expect AR1 0x62
+end
+case macd_repeat                    # RPT #1; MACD 200h,*-; APAC (moves each word up one)
+code B161 8B89 BB01 A390 0200 BE04
+set ram:0060 3
+set ram:0061 5
+set code:0200 4
+set code:0201 6
+expect ACC 38
+expect PREG 18
+expect TREG 3
+expect ram:0062 5
+expect ram:0061 3
+expect AR1 0x5f
+end
+case dmov
+code BC00 7760
+set ram:0060 0x55
+expect ram:0061 0x55
+end
+case pshd_popd_push_pop
+code BC00 7660 8A61 BE3C BE32
+set ram:0060 0x1234
+set ACC 0xaaaa0042
+expect ram:0061 0x1234
+expect ACC 0x42
+end
+# ---- control flow
+case b_taken                        # B 104h skips ADD #10h at 103h
+code B901 7980 0104 B810 B802
+expect ACC 3
+end
+case call_ret                       # CALL 106h; ADD #1; B 108h ... subroutine: ADD #10h; RET
+code B900 7A80 0106 B801 7980 0108 B810 EF00
+expect ACC 0x11
+end
+case call_pushes_return             # CALL pushes PC+2 and shifts the stack
+code 7A80 0102
+set STK0 0x55
+expect STK0 0x102
+expect STK1 0x55
+end
+case bcnd_eq_taken                  # BCND 105h,EQ with ACC=0: skips ADD #10h
+code B900 E388 0104 B810
+expect ACC 0
+end
+case bcnd_eq_not_taken
+code B901 E388 0105 B810
+expect ACC 0x11
+end
+case bcnd_gt                        # ACC>0: GT
+code B905 E304 0104 B810
+expect ACC 5
+end
+case bcnd_lt_not_taken
+code B905 E344 0105 B810
+expect ACC 0x15
+end
+case bcnd_ov_clears_ov              # BCND OV: taken, OV cleared
+code E322 0102
+set OV 1
+expect OV 0
+end
+case bcnd_nov_taken
+code E3A2 0102
+set OV 0
+expect OV 0
+end
+case bcnd_tc                        # TP=01 TC: BCND 102h,TC
+code E100 0102
+set TC 1
+end
+case bcnd_c_and_neq                 # C and NEQ: both must hold (ZLVC = 0001 1001 / 1001 -> E319?)
+code E319 0103 B810
+set ACC 1
+set C 1
+expect ACC 1
+end
+case cc_retc                        # CC 106h,EQ taken; RETC GEQ returns
+code B900 EB88 0106 B801 7980 0109 B802 EF8C B804
+expect ACC 3
+end
+case retc_not_taken                 # RETC LT with ACC>=0: falls through
+code B900 EF44 B801
+expect ACC 1
+end
+case banz_loop                      # AR1=2: ADD #1 three times, AR1 ends at FFFFh
+code B102 8B89 B801 7B90 0102
+expect ACC 3
+expect AR1 0xffff
+end
+case bacc
+code BE20 B801
+set ACC 0x102
+expect ACC 0x102
+end
+case cala                           # CALA: push PC+1, jump to ACC
+code BE30 B801 B802
+set ACC 0x103
+expect STK0 0x101
+expect ACC 0x103
+end
+case intr_3                         # INTR 3: push PC+1, INTM=1, jump to vector 6
+code BE63
+at 0006 7980 0101
+expect STK0 0x101
+expect INTM 1
+end
+case trap                           # TRAP: vector 22h, INTM unchanged
+code BE51
+at 0022 7980 0101
+set INTM 0
+expect STK0 0x101
+expect INTM 0
+end
+case nmi
+code BE52
+at 0024 7980 0101
+expect STK0 0x101
+expect INTM 1
+end
+case stack_depth_8                  # nine PUSHes lose the first value
+code BE3C BE3C BE3C BE3C BE3C BE3C BE3C BE3C BE3C
+set ACC 1
+expect STK7 1
+end
+case pop_twice_dup                  # after a POP the bottom two stack words are equal
+code BE32
+set STK0 7
+set STK1 8
+set STK7 9
+set STK6 5
+expect ACC 7
+expect STK0 8
+expect STK7 9
+expect STK6 9
+end
+# ---- the check must be able to fail
+case broken_expectation xfail
+code B905 BA03
+expect ACC 3
+end
