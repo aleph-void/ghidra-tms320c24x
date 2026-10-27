@@ -1,6 +1,2 @@
-dist/
-build/
 *.sla
-.gradle/
-.vscode/
-.venv/
+*.lock
